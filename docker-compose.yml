@@ -1,0 +1,94 @@
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: corporate_travel_app
+    restart: unless-stopped
+    working_dir: /var/www/
+    volumes:
+      - ./backend:/var/www
+    networks:
+      - corporate_travel_network
+    depends_on:
+      - db
+      - redis
+      - mailhog
+    environment:
+      PHP_IDE_CONFIG: "serverName=Docker"
+      XDEBUG_CONFIG: "client_host=host.docker.internal client_port=9003"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  db:
+    image: mysql:8.0
+    container_name: corporate_travel_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      - corporate_travel_network
+    ports:
+      - "3306:3306"
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: corporate_travel_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./backend:/var/www
+      - ./docker/nginx/:/etc/nginx/conf.d/
+    networks:
+      - corporate_travel_network
+    depends_on:
+      - app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: corporate_travel_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - corporate_travel_network
+    environment:
+      - VITE_API_URL=http://localhost:8000
+
+  redis:
+    image: redis:alpine
+    container_name: corporate_travel_redis
+    restart: unless-stopped
+    networks:
+      - corporate_travel_network
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: corporate_travel_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP porta
+      - "8025:8025"  # Interface web
+    networks:
+      - corporate_travel_network
+
+networks:
+  corporate_travel_network:
+    driver: bridge
+
+volumes:
+  dbdata:
+    driver: local
